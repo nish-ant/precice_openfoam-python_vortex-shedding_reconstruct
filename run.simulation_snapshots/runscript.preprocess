@@ -1,0 +1,104 @@
+#!/bin/bash
+#
+#SBATCH --job-name=preprocess
+#SBATCH --output=log.preprocess
+#
+#SBATCH --ntasks=12
+#SBATCH --time=0-12:00:00
+#SBATCH --partition=preemptible
+#SBATCH --ear=off
+
+echo "#############################"
+echo "User:" $USER
+echo "Submit time:" $(squeue -u $USER -o '%30j %20V' | \
+    grep -e $SLURM_JOB_NAME | awk '{print $2}')
+echo "Launch time:" `date +"%Y-%m-%dT%T"`
+echo "Host:" `hostname`
+echo "Directory:" `pwd`
+echo "SLURM_JOBID:" $SLURM_JOBID
+echo "SLURM_JOB_NAME:" $SLURM_JOB_NAME
+echo "SLURM_SUBMIT_DIR:" $SLURM_SUBMIT_DIR
+echo "SLURM_JOB_NODELIST:" $SLURM_JOB_NODELIST
+echo "#############################"
+
+#- Ensure only owner can read the output
+umask 0077
+
+export SLURM_COMP_VERBOSE=3
+export SLURM_LOADER_VERBOSE=3
+
+#- User input
+np=$SLURM_NTASKS
+runNumber=0
+
+#- Source the bash profile and then call the appropriate OpenFOAM version function
+source /gpfs/home/nkumar001/.bash_profile
+module purge
+module load gcc/7.3.0
+#
+source /gpfs/home/nkumar001/tools/spack/share/spack/setup-env.sh
+spack env activate preciceFoam 
+#
+export SOWFA_DIR=$WM_PROJECT_USER_DIR/SOWFA6
+export SOWFA_APPBIN=$SOWFA_DIR/platforms/$WM_OPTIONS/bin
+export SOWFA_LIBBIN=$SOWFA_DIR/platforms/$WM_OPTIONS/lib
+export LD_LIBRARY_PATH=$SOWFA_LIBBIN:$OPENFAST_DIR/lib:$BLASLIB:$LD_LIBRARY_PATH
+export PATH=$SOWFA_APPBIN:$OPENFAST_DIR/bin:$PATH
+
+#- Set Open MPI MCA parameters
+export OMPI_MCA_oob=tcp
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_btl_tcp_if_include=ib0
+
+parentDIR=$(pwd)
+
+#- Get the control dictionary for this particular run
+cp system/controlDict.$runNumber system/controlDict
+
+start=`date +%s.%N`
+
+#- Launch using primitive commands
+# -----------------------------------------------------------------
+# foamClearPolyMesh
+
+#- Convert gmsh to OpenFOAM
+#- NOTE: Modification in constant/polyMesh/boundary: 
+#-      frontAndBack
+#-          type            empty;
+#-          physicalType    empty;
+#-          inGroups        1(empty);
+#-          nFaces          ...;
+#-          startFace       ...;
+#-      cylinderWalls
+#-          type            wall;
+#-          physicalType    wall;
+#-          inGroups        1(wall);
+#-          nFaces          ...;
+#-          startFace       ...;
+boundaryFile="constant/polyMesh/boundary"
+if [ -f "$boundaryFile" ]; then
+    echo "WARNING: File constant/polyMesh/boundary exists. Verify if correct."
+    mv $boundaryFile ${boundaryFile}.bak
+else
+    echo "ERROR: Failed to find constant/polyMesh/boundary. Run gmshToFoam."
+fi
+
+gmshToFoam cylinder.msh > log.gmshToFoam 2>&1
+
+#- Restore boundaryFile
+mv ${boundaryFile}.bak "constant/polyMesh/boundary"
+
+renumberMesh -overwrite > log.renumberMesh 2>&1
+decomposePar > log.decomposePar 2>&1
+checkMesh > log.checkMesh 2>&1
+
+#- Copy relevant pointCloud file
+cp system/sampling/pointCloud.lf.dat system/sampling/pointCloud.dat
+
+# -----------------------------------------------------------------
+
+end=`date +%s.%N`
+td=$( echo "$end - $start" | bc -l )
+echo "Time elapsed:" $( date -d "@$td" -u "+$((${td%.*}/86400))-%H:%M:%S" )
+
+# --------------------------------------------------------------EOF

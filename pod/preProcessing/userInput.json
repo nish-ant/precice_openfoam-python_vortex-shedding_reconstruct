@@ -1,0 +1,27 @@
+{
+    "sampleDirectories" : [
+        "/scratch/nkumar001/OpenFOAM/nkumar001-6/run/precice_openfoam-python_vortex-shedding_reconstruct/run.simulation_snapshots"
+    ],
+    "samplePoints" : [ 200 ],
+    "snapTimes" : {
+        "tStart" : 100.01,
+        "tEnd" : 150.0,
+        "nSkip" : 1
+    },
+    "_help_fields": "Use a combination of -- p U k nut omega",
+    "fields" : [
+        "p",
+        "U",
+        "k",
+        "nut",
+        "omega"
+    ],
+    "modeCutoff" : {
+        "ric" : 1,
+        "nModeMax" : 6
+    },
+        "inflowDomain" : {
+        "xyzMin" : [-4.995, -0.995, 0.005],
+        "xyzMax" : [-0.495, 4.995, 0.995]
+    }
+}

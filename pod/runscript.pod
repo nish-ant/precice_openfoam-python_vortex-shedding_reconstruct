@@ -1,0 +1,181 @@
+#!/bin/bash
+#
+#SBATCH --job-name=pod
+#SBATCH --output=log.%x
+#
+#SBATCH --ntasks=64
+#SBATCH --time=0-48:00:00
+#SBATCH --partition=preemptible
+#SBATCH --ear=off
+
+echo "#############################"
+echo "User:" $USER
+echo "Submit time:" $(squeue -u $USER -o '%30j %20V' | \
+    grep -e $SLURM_JOB_NAME | awk '{print $2}')
+echo "Launch time:" `date +"%Y-%m-%dT%T"`
+echo "Host:" `hostname`
+echo "Directory:" `pwd`
+echo "SLURM_JOBID:" $SLURM_JOBID
+echo "SLURM_JOB_NAME:" $SLURM_JOB_NAME
+echo "SLURM_SUBMIT_DIR:" $SLURM_SUBMIT_DIR
+echo "SLURM_JOB_NODELIST:" $SLURM_JOB_NODELIST
+echo "#############################"
+
+# ---------------------------------------------------------------------------
+#- Ensure only owner can read the output
+umask 0077
+
+export SLURM_COMP_VERBOSE=3
+export SLURM_LOADER_VERBOSE=3
+
+#- Source 
+source /gpfs/home/nkumar001/.bash_profile
+module purge
+module load openmpi/4.1.1/gcc/11.2.0
+module load mpi4py/3.1.1/mpi/openmpi/4.1.1
+module load jq/1.6
+#- Path to python binary
+pythonPATH="/gpfs/home/nkumar001/anaconda3/envs/sowfa/bin/python"
+# pythonPATH="python"
+#- Path to POD executable
+PODEXE="/gpfs/home/nkumar001/rom4wt/POD/cmake-build-release/bin/POD"
+
+#- Set Open MPI MCA parameters
+export OMPI_MCA_oob=tcp
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_btl_tcp_if_include=ib0
+
+#- User input
+#- Number of cores to perform POD
+nProcs=$SLURM_NTASKS
+#-
+inputFILE="./preProcessing/userInput.json"
+#- Sample directories
+declare -a sampleDirectories=($(jq -r ".sampleDirectories[]" $inputFILE | tr "\n" " "))
+#- Field
+declare -a arrFields=($(jq -r ".fields[]" $inputFILE | tr "\n" " "))
+#- Relative information criterion
+ric=$(jq '.modeCutoff.ric' $inputFILE)
+#- Maximum number of modes to preserve
+nModeMax=$(jq '.modeCutoff.nModeMax' $inputFILE)
+
+#- Generate VTK files
+vtkFLAG=1
+
+#- Identifier string: `np<nProcs>_<field-names>_N<nModes>`
+fldstr=$(printf "%s-" "${arrFields[@]}" | rev | cut -c 2- | rev)
+# runID="np${nProcs}_${fldstr}_N${nModeMax}.run.boundary.hf"
+runID="np${nProcs}_${fldstr}_N${nModeMax}.run.overlap.hf"
+
+#- Logging
+echo -e "\n"
+echo "########### INPUT ###########"
+echo "nProcs:" $nProcs
+echo "fld:" ${arrFields[*]}
+echo "ric:" $ric
+echo "nModeMax:" $nModeMax
+echo "runID:" $runID
+
+parentDIR=$(pwd)
+podDIR="${parentDIR}/pod.${runID}"
+rm -rf $podDIR
+mkdir -p $podDIR
+
+#- Collect snapshot data
+timeList=${podDIR}/snapshotTimes
+snapsDIR=${podDIR}/internalField
+# snapsDIR=${podDIR}/boundaryField
+timeListSamples=${timeList}.samples
+
+# ---------------------------------------------------------------------------
+#- Generate list of time steps used for POD
+#- OPTION 1: Custom time list
+${parentDIR}/preProcessing/createTimeList.sh $timeList $timeListSamples
+#- OPTION 2: Automatic time list
+# /usr/bin/ls -A -1v $snapsDIR | grep -E '^[0-9.]+$' > $timeList 2>&1
+
+# ---------------------------------------------------------------------------
+#- Snapshots directory
+echo -e "\nReading snapshots using ${nProcs} processor(s)"
+#- NOTE: Array MUST be the last argument in bash
+#- SEE: https://askubuntu.com/a/995110/446303
+start=`date +%s.%N`
+mkdir -p $snapsDIR
+#- OPTION 1: No modification of snapshots
+${parentDIR}/preProcessing/createSnapshots.sh $timeList $timeListSamples \
+    $parentDIR $snapsDIR "${arrFields[@]}"
+#- OPTION 2: Modify and save snapshots
+# cnt=1
+# for sampleDIR in "${sampleDirectories[@]}"; do
+#     for fld in "${arrFields[@]}"; do
+#         echo -n "sampleCount: " $cnt " fld: " $fld "... "
+#         mpirun -np $nProcs $pythonPATH ${parentDIR}/preProcessing/removeForcingField.py \
+#             -f $fld -t $timeList -s $sampleDIR -o $snapsDIR \
+#             # > ${podDIR}/log.removeForcingField.${cnt}.${fld} 2>&1
+#         echo "DONE!"
+#     done
+#     let cnt++
+# done
+end=`date +%s.%N`
+echo "Time elapsed:" $( echo "$end - $start" | bc -l )
+
+# ---------------------------------------------------------------------------
+start=`date +%s.%N`
+if [ -e "$PODEXE" ]; then
+    t0=$(head -n 1 $timeListSamples)
+    for fld in "${arrFields[@]}"; do
+        #- Initialize output directories
+        chronosDIR="${podDIR}/chronos.${fld}"
+        modesDIR="${podDIR}/modes.${fld}"
+        # modeVtkDIR=${podDIR}/VTK.${fld}
+        mkdir -p $chronosDIR $modesDIR # $modeVtkDIR
+
+        #- Get size of variable
+        fldt0FILE=${snapsDIR}/${t0}/cloud_${fld}.xy
+        varSize=$(head -n 1 $fldt0FILE | awk '{print NF}')
+
+        echo -e "\n"
+        echo "####### Field: ${fld} #######"
+        echo -e "\nRunning POD script ...\n"
+        set -o xtrace
+        time $PODEXE -i $snapsDIR \
+            -tf $timeListSamples \
+            -pcfn cloud_${fld}.xy \
+            -c $chronosDIR \
+            -m $modesDIR \
+            -ric $ric \
+            -v $varSize \
+            -nm $nModeMax \
+            -np $nProcs > ${podDIR}/log.pod.${fld} 2>&1
+        set +o xtrace
+
+        #- Python script to evaluate RIC
+        echo -e "\nEvaluating RIC..."
+        time $pythonPATH ${parentDIR}/postProcessing/calculateRIC.py \
+            $chronosDIR $nModeMax > ${podDIR}/log.ric.${fld} 2>&1
+
+        #- Python script to save modes as VTK
+        # if [ $vtkFLAG -eq 1 -a $fld = "U" ]; then
+        if [ $vtkFLAG -eq 1 ]; then
+            echo -e "\nGenerating VTK files of modes..."
+            time $pythonPATH ${parentDIR}/postProcessing/plot.pod/modeToVTK.py \
+                $modesDIR $varSize $nModeMax \
+                > ${podDIR}/log.modeToVTK.${fld} 2>&1
+        fi
+    done
+    echo "DONE!"
+    # exit 0
+else
+    echo "$PODEXE not found. Please compile and install."
+    exit 1
+fi
+end=`date +%s.%N`
+td=$( echo "$end - $start" | bc -l )
+echo "Time elapsed:" $( date -d "@$td" -u "+$((${td%.*}/86400))-%H:%M:%S" )
+# ---------------------------------------------------------------------------
+
+#- Copy file
+cp log.$SLURM_JOB_NAME ${podDIR}/log.runscript.pod.${runID}
+cp preProcessing/userInput.json ${podDIR}/
+
+# ------------------------------------------------------------------------EOF

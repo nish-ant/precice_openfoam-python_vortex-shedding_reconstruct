@@ -1,0 +1,110 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.4.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application       pimpleFoam; // icoFoam; //
+
+startFrom         startTime; // latestTime; //
+
+startTime         100;
+
+stopAt            endTime;
+
+endTime           150.0;
+
+deltaT            0.001; // 0.005; 
+
+writeControl      adjustableRunTime;
+
+writeInterval     0.5; // 50;
+
+purgeWrite        1;
+
+writeFormat       ascii;
+
+writePrecision    12;
+
+writeCompression  off;
+
+timeFormat        general;
+
+timePrecision     6;
+
+runTimeModifiable no; // yes; // 
+
+adjustTimeStep    no; // yes; // 
+
+maxCo             1; // 0.3;
+
+maxDeltaT         0.1; // 20.0;
+
+// ************************************************************************* //
+
+// ************************************************************************* //
+functions
+{
+
+#include "sampling/internalCloud"
+
+forces
+{
+    type                forces;
+    functionObjectLibs  ("libforces.so");
+    writeControl        timeStep;
+    writeInterval       1;
+     
+    patches             ( "cylinderWalls" );
+    pName               p;
+    UName               U;
+    rho                 rhoInf;
+    log                 true; 
+    CofR                (0 0 0);     
+    rhoInf              1.225; // 1.00;
+}
+ 
+ 
+forceCoeffs
+{
+    type                forceCoeffs;
+    functionObjectLibs  ( "libforces.so" );
+    writeControl        timeStep;
+    writeInterval       1;
+ 
+    patches             ( "cylinderWalls" );
+    pName               p;
+    UName               U;
+    rho                 rhoInf;
+    log                 true;
+    rhoInf              1.00;
+     
+    liftDir             (0 1 0);
+    dragDir             (1 0 0);
+    CofR                (0 0 0);
+    pitchAxis           (0 0 1);
+     
+    magUInf             1;
+    rhoInf              1.00;
+    lRef                1;
+    Aref                1;
+}
+
+preCICE_Adapter
+{
+    type preciceAdapterFunctionObject;
+    libs ("libpreciceAdapterFunctionObject.so");
+}
+
+}

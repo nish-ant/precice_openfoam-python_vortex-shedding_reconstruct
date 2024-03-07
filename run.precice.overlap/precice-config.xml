@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<precice-configuration>
+  <log>
+    <sink
+      filter="%Severity% > debug and %Rank% = 0"
+      format="---[precice] %ColorizedSeverity% %Message%"
+      enabled="true" />
+  </log>
+
+  <!--
+  <solver-interface dimensions="3">
+    <data:scalar name="Pressure" />
+    <data:vector name="Velocity" />
+    <data:scalar name="TKE" />
+    <data:scalar name="TurbulentSpecificDissipationRate" />
+    <data:scalar name="EddyViscosity" />
+    <data:scalar name="PressureGradient" />
+
+    <mesh name="hf-Mesh">
+      <use-data name="Pressure" />
+      <use-data name="Velocity" />
+      <use-data name="TKE" />
+      <use-data name="TurbulentSpecificDissipationRate" />
+      <use-data name="EddyViscosity" />
+      <use-data name="PressureGradient" />
+    </mesh>
+
+    <mesh name="lf-Mesh">
+      <use-data name="Pressure" />
+      <use-data name="Velocity" />
+      <use-data name="TKE" />
+      <use-data name="TurbulentSpecificDissipationRate" />
+      <use-data name="EddyViscosity" />
+      <use-data name="PressureGradient" />
+    </mesh>
+
+    <participant name="hf">
+      <use-mesh name="hf-Mesh" provide="yes" />
+      <use-mesh name="lf-Mesh" from="lf" />
+      <write-data name="PressureGradient" mesh="hf-Mesh" />
+      <read-data name="Pressure" mesh="hf-Mesh" />
+      <read-data name="Velocity" mesh="hf-Mesh" />
+      <read-data name="TKE" mesh="hf-Mesh" />
+      <read-data name="TurbulentSpecificDissipationRate" mesh="hf-Mesh" />
+      <read-data name="EddyViscosity" mesh="hf-Mesh" />
+      <mapping:nearest-neighbor
+        direction="read"
+        from="lf-Mesh"
+        to="hf-Mesh"
+        constraint="consistent" />
+    </participant>
+
+    <participant name="lf">
+      <use-mesh name="lf-Mesh" provide="yes" />
+      <use-mesh name="hf-Mesh" from="hf" />
+      <read-data name="PressureGradient" mesh="lf-Mesh" />
+      <write-data name="Pressure" mesh="lf-Mesh" />
+      <write-data name="Velocity" mesh="lf-Mesh" />
+      <write-data name="TKE" mesh="lf-Mesh" />
+      <write-data name="TurbulentSpecificDissipationRate" mesh="lf-Mesh" />
+      <write-data name="EddyViscosity" mesh="lf-Mesh" />
+      <mapping:nearest-neighbor
+        direction="read"
+        from="hf-Mesh"
+        to="lf-Mesh"
+        constraint="consistent" />
+    </participant>
+
+    <m2n:sockets from="lf" to="hf" exchange-directory="../" network="ib0" />
+
+    <coupling-scheme:serial-explicit>
+      <participants first="lf" second="hf" />
+      <time-window-size value="0.01" />
+      <max-time value="50.0" />
+      <exchange data="PressureGradient" mesh="hf-Mesh" from="hf" to="lf" />
+      <exchange data="Pressure" mesh="lf-Mesh" from="lf" to="hf" />
+      <exchange data="Velocity" mesh="lf-Mesh" from="lf" to="hf" />
+      <exchange data="TKE" mesh="lf-Mesh" from="lf" to="hf" />
+      <exchange data="TurbulentSpecificDissipationRate" mesh="lf-Mesh" from="lf" to="hf" />
+      <exchange data="EddyViscosity" mesh="lf-Mesh" from="lf" to="hf" />
+    </coupling-scheme:serial-explicit>
+
+  </solver-interface>
+  -->
+
+  <solver-interface dimensions="3">
+    <data:scalar name="Pressure" />
+    <data:vector name="Velocity" />
+    <data:scalar name="PressureGradient" />
+
+    <mesh name="hf-Mesh">
+      <use-data name="Pressure" />
+      <use-data name="Velocity" />
+      <use-data name="PressureGradient" />
+    </mesh>
+
+    <mesh name="lf-Mesh">
+      <use-data name="Pressure" />
+      <use-data name="Velocity" />
+      <use-data name="PressureGradient" />
+    </mesh>
+
+    <participant name="hf">
+      <use-mesh name="hf-Mesh" provide="yes" />
+      <use-mesh name="lf-Mesh" from="lf" />
+      <write-data name="PressureGradient" mesh="hf-Mesh" />
+      <read-data name="Pressure" mesh="hf-Mesh" />
+      <read-data name="Velocity" mesh="hf-Mesh" />
+      <mapping:nearest-neighbor
+        direction="read"
+        from="lf-Mesh"
+        to="hf-Mesh"
+        constraint="consistent" />
+    </participant>
+
+    <participant name="lf">
+      <use-mesh name="lf-Mesh" provide="yes" />
+      <use-mesh name="hf-Mesh" from="hf" />
+      <read-data name="PressureGradient" mesh="lf-Mesh" />
+      <write-data name="Pressure" mesh="lf-Mesh" />
+      <write-data name="Velocity" mesh="lf-Mesh" />
+      <mapping:nearest-neighbor
+        direction="read"
+        from="hf-Mesh"
+        to="lf-Mesh"
+        constraint="consistent" />
+    </participant>
+
+    <m2n:sockets from="lf" to="hf" exchange-directory="../" network="ib0" />
+
+    <coupling-scheme:serial-explicit>
+      <participants first="lf" second="hf" />
+      <time-window-size value="0.001" />
+      <max-time value="50.0" />
+      <exchange data="PressureGradient" mesh="hf-Mesh" from="hf" to="lf" />
+      <exchange data="Pressure" mesh="lf-Mesh" from="lf" to="hf" />
+      <exchange data="Velocity" mesh="lf-Mesh" from="lf" to="hf" />
+    </coupling-scheme:serial-explicit>
+
+  </solver-interface>
+
+</precice-configuration>

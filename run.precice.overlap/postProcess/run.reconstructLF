@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+#SBATCH --job-name=reconstructLF
+#SBATCH --output=log.%x
+#SBATCH --ntasks=1
+#SBATCH --time=0-24:00:00
+#SBATCH --partition=imb,imb-resources,preemptible
+#SBATCH --exclude=visu[01-04]
+#SBATCH --ear=off
+
+echo "#############################"
+echo "User:" $USER
+echo "Submit time:" $(squeue -u $USER -o '%30j %20V' | grep -e $SLURM_JOB_NAME | awk '{print $2}')
+echo "Host:" `hostname`
+echo "Directory:" `pwd`
+echo "SLURM_JOBID:" $SLURM_JOBID
+echo "SLURM_JOB_NAME:" $SLURM_JOB_NAME
+echo "SLURM_SUBMIT_DIR:" $SLURM_SUBMIT_DIR
+echo "SLURM_JOB_NODELIST:" $SLURM_JOB_NODELIST
+echo "#############################"
+
+#- Ensure only owner can read the output
+umask 0077
+
+export SLURM_COMP_VERBOSE=3
+export SLURM_LOADER_VERBOSE=3
+
+#- User input
+np=$SLURM_NTASKS
+
+#- Source the bash profile and then call the appropriate OpenFOAM version function
+source /gpfs/home/nkumar001/.bash_profile
+module purge
+# module load openmpi/4.1.1/gcc/11.2.0
+# module load mpi4py/3.1.1/mpi/openmpi/4.1.1
+
+#- Set Open MPI MCA parameters
+# export OMPI_MCA_oob=tcp
+# export OMPI_MCA_btl_openib_allow_ib=1
+# export OMPI_MCA_btl_tcp_if_include=ib0
+
+pythonPATH="/gpfs/home/nkumar001/anaconda3/envs/sowfa/bin/python"
+
+parentDIR=$(pwd)
+
+podPATH="/scratch/nkumar001/OpenFOAM/nkumar001-6/run/vortex-shedding-cases.run20230609/c8.nearBottom.reconstructLF/pod/pod.np64_p-U-k-nut-omega_N31.run.overlap.hf"
+chronosPATH="/scratch/nkumar001/OpenFOAM/nkumar001-6/run/vortex-shedding-cases.run20230609/c8.nearBottom.reconstructLF/run.precice.overlap/lf-galfree/chronos"
+refPATH="/scratch/nkumar001/OpenFOAM/nkumar001-6/run/vortex-shedding-cases.run20230609/c8.nearBottom.reconstructLF/run.hf/postProcessing/internalField"
+fields=('p' 'U')
+nModes=31
+
+start=`date +%s.%N`
+
+#--------------------------------------------------
+for fld in "${fields[@]}"; do
+    # mpirun -np $np 
+    $pythonPATH reconstructLF.py -p $podPATH -c $chronosPATH -r $refPATH -f $fld -n $nModes # > log.reconstructLF 2>&1
+done
+
+end=`date +%s.%N`
+td=$( echo "$end - $start" | bc -l )
+echo "Time elapsed:" $( date -d "@$td" -u "+$((${td%.*}/86400))-%H:%M:%S" )
+
+# --------------------------------------------------------------EOF

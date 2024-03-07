@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+#SBATCH --job-name=solve.2
+#SBATCH --output=log.solve.2
+#
+#SBATCH --ntasks=12
+#SBATCH --time=0-12:00:00
+#SBATCH --partition=preemptible
+#SBATCH --ear=off
+
+echo "#############################"
+echo "User:" $USER
+echo "Submit time:" $(squeue -u $USER -o '%30j %20V' | \
+    grep -e $SLURM_JOB_NAME | awk '{print $2}')
+echo "Launch time:" `date +"%Y-%m-%dT%T"`
+echo "Host:" `hostname`
+echo "Directory:" `pwd`
+echo "SLURM_JOBID:" $SLURM_JOBID
+echo "SLURM_JOB_NAME:" $SLURM_JOB_NAME
+echo "SLURM_SUBMIT_DIR:" $SLURM_SUBMIT_DIR
+echo "SLURM_JOB_NODELIST:" $SLURM_JOB_NODELIST
+echo "#############################"
+
+#- Ensure only owner can read the output
+umask 0077
+
+export SLURM_COMP_VERBOSE=3
+export SLURM_LOADER_VERBOSE=3
+
+#- User Input.
+np=$SLURM_NTASKS
+runNumber=2
+
+#- Source the bash profile and then call the appropriate OpenFOAM version function
+source /gpfs/home/nkumar001/.bash_profile
+module purge
+module load gcc/7.3.0
+#
+source /gpfs/home/nkumar001/tools/spack/share/spack/setup-env.sh
+spack env activate preciceFoam 
+
+#- Set Open MPI MCA parameters
+export OMPI_MCA_oob=tcp
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_btl_tcp_if_include=ib0
+
+parentDIR=$(pwd)
+
+#- Get the control dictionary for this particular run.
+cp system/controlDict.$runNumber system/controlDict
+
+start=`date +%s.%N`
+
+#--------------------------------------------------
+# pimpleFoam > log 2>&1 | tail -f log
+# pimpleFoam > log.pimpleFoam 2>&1
+mpirun -np $np pimpleFoam -parallel > log.pimpleFoam.$runNumber 2>&1
+
+# yPlusRas -latestTime -noFunctionObjects > log.yPlusRas 2>&1
+# paraFoam > log.paraFoam 2>&1
+
+#- Reconstruct
+# reconstructPar -latestTime > log.reconstructPar.latestTime 2>&1
+reconstructPar -time '100,150' > log.reconstructPar 2>&1
+
+foamToVTK -noZero > log.foamToVTK 2>&1
+
+#--------------------------------------------------
+end=`date +%s.%N`
+td=$( echo "$end - $start" | bc -l )
+echo "Time elapsed:" $( date -d "@$td" -u "+$((${td%.*}/86400))-%H:%M:%S" )
+
+# --------------------------------------------------------------EOF

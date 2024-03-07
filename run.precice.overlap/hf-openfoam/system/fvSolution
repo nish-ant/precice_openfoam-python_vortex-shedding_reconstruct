@@ -1,0 +1,136 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.3.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+solvers
+{
+
+    p
+    {
+        solver           GAMG;
+        tolerance        1e-6;
+        relTol           0.001;
+        smoother         GaussSeidel;
+        nPreSweeps       0;
+        nPostSweeps      2;
+        cacheAgglomeration on;
+        agglomerator     faceAreaPair;
+        nCellsInCoarsestLevel 100;
+        mergeLevels      1;
+        minIter          2;
+    }
+
+    Phi
+    {
+        $p;
+    }
+
+    pFinal
+    {
+        solver          PCG;
+        preconditioner  DIC;
+        tolerance       1e-06;
+        relTol          0;
+        minIter         3;
+    }
+
+    U
+    {
+        solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-08;
+        relTol          0;
+        minIter         3;
+    }
+
+    UFinal
+    {
+        solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-08;
+        relTol          0;
+        minIter         3;
+    }
+
+    omega
+    {
+        solver          PBiCG; // PBiCGStab;
+        preconditioner  DILU;
+        tolerance       1e-08;
+        relTol          0;
+        minIter         3;
+    }
+
+    omegaFinal
+    {
+        solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-08;
+        relTol          0;
+        minIter         3;
+    }
+
+    k
+    {
+        solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-08;
+        relTol          0;
+        minIter         3;
+    }
+
+    kFinal
+    {
+        solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-08;
+        relTol          0;
+        minIter         3;
+    }
+}
+
+// potentialFlow
+// {
+//     nNonOrthogonalCorrectors 10;
+//     PhiRefCell          0;
+//     PhiRefValue         0;
+// }
+
+PIMPLE
+{
+    nOuterCorrectors 2;
+    nCorrectors 2;
+    nNonOrthogonalCorrectors 1;
+    pRefCell        0;
+    pRefValue       0;
+}
+
+relaxationFactors
+{
+    fields
+    {
+        p               0.3;
+    }
+    equations
+    {
+        U               0.7;
+        k               0.7;
+        omega           0.7;
+    }
+}
+
+
+// ************************************************************************* //

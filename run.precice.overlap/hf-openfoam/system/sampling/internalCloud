@@ -1,0 +1,77 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.4.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system/sampling";
+    object      internalCloud;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+internalField
+{
+    type                 sets;
+    functionObjectLibs   ("libsampling.so");
+    enabled              true;
+    interpolationScheme  cellPoint;
+    setFormat            raw;
+    writeControl         adjustableRunTime; // timeStep; // runTime;
+    writeInterval        0.001; // 100; // 0.1;
+
+    // timeStart       150;
+    // timeEnd         199.99;
+
+    // fields ( p U k omega );
+    fields ( p U k omega nut );
+
+    sets
+    (
+      cloud
+      {
+         type         points;
+         axis         xyz;
+         points       (
+             #include "pointCloud.dat"
+             );
+         ordered      true;
+      }
+    );
+} 
+
+// boundaryField
+// {
+//     type                 sets;
+//     functionObjectLibs   ("libsampling.so");
+//     enabled              true;
+//     interpolationScheme  cellPoint;
+//     setFormat            raw;
+//     writeControl         adjustableRunTime; // timeStep; // runTime;
+//     writeInterval        0.01; // 100; // 0.1;
+
+//     // timeStart       150;
+//     // timeEnd         199.99;
+
+//     fields ( p U );
+
+//     sets
+//     (
+//       cloud
+//       {
+//          type         points;
+//          axis         xyz;
+//          points       (
+//              #include "getBoundaryPoints/faceCenter.dat"
+//              );
+//          ordered      true;
+//       }
+//     );
+// } 
+
+// ************************************************************************* //

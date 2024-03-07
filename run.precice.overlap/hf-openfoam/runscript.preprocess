@@ -1,0 +1,122 @@
+#!/bin/bash
+#
+#SBATCH --job-name=preprocess
+#SBATCH --output=log.preprocess
+#
+#SBATCH --ntasks=1
+#SBATCH --time=0-12:00:00
+#SBATCH --partition=preemptible
+#SBATCH --ear=off
+
+echo "#############################"
+echo "User:" $USER
+echo "Submit time:" $(squeue -u $USER -o '%30j %20V' | \
+    grep -e $SLURM_JOB_NAME | awk '{print $2}')
+echo "Host:" `hostname`
+echo "Directory:" `pwd`
+echo "SLURM_JOBID:" $SLURM_JOBID
+echo "SLURM_JOB_NAME:" $SLURM_JOB_NAME
+echo "SLURM_SUBMIT_DIR:" $SLURM_SUBMIT_DIR
+echo "SLURM_JOB_NODELIST:" $SLURM_JOB_NODELIST
+echo "#############################"
+
+#- Ensure only owner can read the output
+umask 0077
+
+export SLURM_COMP_VERBOSE=3
+export SLURM_LOADER_VERBOSE=3
+
+#- Input
+nprocs=$SLURM_NTASKS
+ms="m0.1"
+tStart=100
+
+#- Load modules
+module purge
+module load gcc/7.3.0
+module load openmpi/4.1.1/gcc/11.2.0
+#
+source /gpfs/home/nkumar001/tools/spack/share/spack/setup-env.sh
+spack env activate preciceFoam 
+
+#- Set Open MPI MCA parameters
+export OMPI_MCA_oob=tcp
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_btl_tcp_if_include=ib0
+
+parentDIR=$(pwd)
+
+start=`date +%s.%N`
+
+#- Get the control dictionary for preprocessing
+cp system/controlDict.0 system/controlDict
+
+#- Precursor simulation
+mapFieldsSource="../../run.simulation_snapshots"
+
+#- Copy coordinates
+sampleDIR="system/sampling"
+mkdir -p $sampleDIR
+cp ${mapFieldsSource}/${sampleDIR}/pointCloud.dat ${sampleDIR}/pointCloud.dat
+# boundarySampleDIR=$sampleDIR/"getBoundaryPoints"
+# mkdir -p $boundarySampleDIR
+# cp ${mapFieldsSource}/${boundarySampleDIR}/faceCenter.dat ${boundarySampleDIR}/
+
+#- Launch using primitive commands
+#--------------------------------------------------
+#- Convert gmsh to OpenFOAM
+#- NOTE: Modification in constant/polyMesh/boundary: 
+#-      frontAndBack
+#-          type            empty;
+#-          physicalType    empty;
+#-          inGroups        1(empty);
+#-          nFaces          ...;
+#-          startFace       ...;
+#-      cylinderWalls
+#-          type            wall;
+#-          physicalType    wall;
+#-          inGroups        1(wall);
+#-          nFaces          ...;
+#-          startFace       ...;
+boundaryFile="constant/polyMesh/boundary.${ms}"
+if [ -f "$boundaryFile" ]; then
+    echo "WARNING: File constant/polyMesh/boundary exists. Verify if correct."
+    mv $boundaryFile ${boundaryFile}.bak
+else
+    echo "ERROR: Failed to find constant/polyMesh/boundary. Run gmshToFoam."
+    # exit 1
+fi
+
+gmshToFoam cylinder.${ms}.msh -noFunctionObjects > log.gmshToFoam 2>&1
+
+#- Restore boundaryFile
+mv ${boundaryFile}.bak "constant/polyMesh/boundary"
+
+#- Generate start time directory
+cp -r 0 ${tStart}
+
+#- Preprocess
+if [ "$nprocs" -gt 1 ]; then
+    renumberMesh -noFunctionObjects -overwrite > log.renumberMesh 2>&1
+    decomposePar -noFunctionObjects > log.decomposePar 2>&1
+    # echo "Running mapFields from $mapFieldsSource to $parentDIR"
+    mapFields -noFunctionObjects $mapFieldsSource -sourceTime $tStart -parallelSource -parallelTarget > log.mapFields 2>&1
+elif [ "$nprocs" -eq 1 ]; then
+    mapFields -noFunctionObjects $mapFieldsSource -sourceTime $tStart > log.mapFields 2>&1
+else
+    echo "ERROR: Check number of processors assigned"
+    exit 1
+fi
+
+checkMesh -noFunctionObjects -allTopology -allGeometry > log.checkMesh 2>&1
+
+foamToVTK -noFunctionObjects -time $tStart > log.foamToVTK.at$tStart 2>&1
+
+#- Generate sampling output at tStart
+# postProcess -fields '(U,p)' -time $tStart > log.postProcess.0 2>&1
+pimpleFoam -postProcess -time $tStart > log.postProcess.0 2>&1
+
+end=`date +%s.%N`
+
+echo "Runtime:" $( echo "$end - $start" | bc -l )
+# --------------------------------------------------------------EOF

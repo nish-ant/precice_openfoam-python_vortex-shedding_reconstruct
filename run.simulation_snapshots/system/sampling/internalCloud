@@ -1,0 +1,58 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.4.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system/sampling";
+    object      internalCloud;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+internalFieldOrig
+{
+    type                 probes; //sets;
+    functionObjectLibs   ("libsampling.so");
+    enabled              true;
+    interpolationScheme  cellPoint;
+    setFormat            raw;
+    writeControl         adjustableRunTime; // timeStep; // runTime;
+    writeInterval        0.01; // 100; // 0.1;
+
+    timeStart       99.99;
+    timeEnd         150;
+
+    // fields ( p U );
+    // fields ( p U k omega );
+    fields ( p U k omega nut );
+
+    probeLocations
+    (
+        #include "pointCloud.dat"
+    );
+    // Optional: filter out points that haven't been found. 
+    //           Default is to include them (with value -VGREAT)
+    includeOutOfBounds  true;
+
+    // sets
+    // (
+    //   cloud
+    //   {
+    //      type         points;
+    //      axis         xyz;
+    //      points       (
+    //          #include "pointCloud.dat"
+    //          );
+    //      ordered      true;
+    //   }
+    // );
+} 
+
+
+// ************************************************************************* //

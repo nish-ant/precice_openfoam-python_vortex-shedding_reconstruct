@@ -1,0 +1,103 @@
+#!/bin/bash
+#
+#SBATCH --job-name=splitProbe2TimeDir
+#SBATCH --output=log.splitProbe2TimeDir
+#
+#SBATCH --ntasks=32
+#SBATCH --time=1-12:00:00
+#SBATCH --partition=preemptible
+#SBATCH --ear=off
+
+echo "#############################"
+echo "User:" $USER
+echo "Submit time:" $(squeue -u $USER -o '%30j %20V' | \
+    grep -e $SLURM_JOB_NAME | awk '{print $2}')
+echo "Launch time:" `date +"%Y-%m-%dT%T"`
+echo "Host:" `hostname`
+echo "Directory:" `pwd`
+echo "SLURM_JOBID:" $SLURM_JOBID
+echo "SLURM_JOB_NAME:" $SLURM_JOB_NAME
+echo "SLURM_SUBMIT_DIR:" $SLURM_SUBMIT_DIR
+echo "SLURM_JOB_NODELIST:" $SLURM_JOB_NODELIST
+echo "#############################"
+
+#- Ensure only owner can read the output
+umask 0077
+
+export SLURM_COMP_VERBOSE=3
+export SLURM_LOADER_VERBOSE=3
+
+#- User input
+np=$SLURM_NTASKS
+
+#- Source the bash profile and then call the appropriate OpenFOAM version function
+source /gpfs/home/nkumar001/.bash_profile
+module purge
+module load openmpi/4.1.1/gcc/11.2.0
+module load mpi4py/3.1.1/mpi/openmpi/4.1.1
+
+#- Set Open MPI MCA parameters
+export OMPI_MCA_oob=tcp
+export OMPI_MCA_btl_openib_allow_ib=1
+export OMPI_MCA_btl_tcp_if_include=ib0
+
+parentDIR=$(pwd)
+
+#- User input
+# inputFILE="./userInput.json"
+
+#- Probe data directory
+# probesOrigDIRList=("${parentDIR}/postProcessing/internalFieldOrig" 
+#     "${parentDIR}/postProcessing/boundaryFieldOrig")
+probesOrigDIRList=("${parentDIR}/postProcessing/internalFieldOrig" )
+#- Output file to save coordinates
+# coordFILEList=("${parentDIR}/system/sampling/pointCloud.xy" 
+#     "${parentDIR}/system/sampling/getBoundaryPoints/faceCenter.xy") 
+coordFILEList=("${parentDIR}/system/sampling/pointCloud.xy" ) 
+
+pythonPATH="/gpfs/home/nkumar001/anaconda3/envs/sowfa/bin/python"
+
+start=`date +%s.%N`
+
+#--------------------------------------------------
+probesOrigDIRCount=0
+probesSUBDIRCount=0
+for probesOrigDIR in ${probesOrigDIRList[*]}; do
+    echo "In" ${probesOrigDIR}/ ":"
+    #- List sub-directories containing probe files
+    #- SEE: https://stackoverflow.com/a/52281940/7473705 
+    probesSUBDIRList=($probesOrigDIR/*/)
+    #- Remove trailing slash
+    probesSUBDIRList=("${probesSUBDIRList[@]%/}") 
+    echo "Found subdirectories: ${probesSUBDIRList[*]}"
+    nProbesSUBDIR=(${#probesSUBDIRList[@]})
+
+    #- Get fields
+    fieldsList=(${probesSUBDIRList[-1]}/*)
+    #- Remove everything up to, and including, the last /
+    fieldsList=("${fieldsList[@]##*/}")
+    echo "Found fields: ${fieldsList[*]}"
+    # nFields=(${#fieldsList[@]})
+
+    coordFILE=${coordFILEList[$probesOrigDIRCount]}
+
+    for probesSUBDIR in ${probesSUBDIRList[*]}; do
+        for fld in ${fieldsList[*]}; do
+            echo -n "Processing sub-directory" $((probesSUBDIRCount+1)) ":" ${probesSUBDIR}/ ", Field: "$fld "... "
+            start=`date +%s.%N`
+            mpirun -np $np $pythonPATH system/sampling/splitProbe2TimeDir.py -p $probesSUBDIR -f $fld -c $coordFILE # > log.splitProbe2TimeDir 2>&1
+            end=`date +%s.%N`
+            echo "DONE!"
+            echo "Runtime:" $( echo "$end - $start" | bc -l )
+        done
+        let probesSUBDIRCount++
+    done
+    let probesOrigDIRCount++
+done
+echo "ALL DONE!"
+
+end=`date +%s.%N`
+td=$( echo "$end - $start" | bc -l )
+echo "Time elapsed:" $( date -d "@$td" -u "+$((${td%.*}/86400))-%H:%M:%S" )
+
+# --------------------------------------------------------------EOF

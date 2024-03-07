@@ -1,0 +1,410 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.3.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     pimpleFoam;
+
+// libs (
+//       "libOpenFOAM.so"
+//       "libsimpleSwakFunctionObjects.so"
+//       "libswakFunctionObjects.so"
+//       "libgroovyBC.so"
+//      );
+
+//startFrom       startTime;
+startFrom       latestTime;
+
+startTime       100;
+
+stopAt          endTime;
+
+endTime         150;
+
+deltaT          0.005;
+//deltaT          0.01;
+//deltaT          0.02;
+//deltaT          0.05;
+
+writeControl    adjustableRunTime;
+/*
+adjustableRunTime
+clockTime
+cpuTime
+runTime
+timeStep
+*/
+
+writeInterval   50;
+
+/*
+secondaryWriteControl    cpuTime;
+secondaryWriteInterval   1000; 
+secondaryPurgeWrite      1; 
+*/
+
+purgeWrite      2;
+
+writeFormat     ascii;
+
+writePrecision  12;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable yes;
+
+adjustTimeStep  no; //yes;
+
+maxCo           1;
+maxDeltaT       0.1;
+
+// ************************************************************************* //
+
+
+functions
+{
+
+additional_fields
+{
+    type                writeRegisteredObject;
+    functionObjectLibs  ( "libIOFunctionObjects.so" );
+
+    //Remember, when in doubt, use bananas        
+    //objectNames         ("bananas");
+    objectNames         ("U_0");
+    //objectNames         ("y");
+
+    enabled         false;
+
+    timeStart       100;
+    timeEnd         150;
+
+    outputControl          outputTime;
+
+    //outputControl          timeStep;
+    //outputInterval         1;
+}
+
+fieldAverage
+{
+    type                fieldAverage;
+    functionObjectLibs  ("libfieldFunctionObjects.so");
+    enabled             true;
+
+    outputControl       outputTime;
+
+    //outputControl       timeStep;
+    //outputInterval      100;
+
+    //cleanRestart        true;
+
+    timeStart       20;
+    timeEnd         150;
+
+    fields
+    (
+        U
+        {
+            mean        on;
+            prime2Mean  on;
+            base        time;
+        }
+        p
+        {
+            mean        on;
+            prime2Mean  on;
+            base        time;
+        }
+    );
+}
+
+forces_object
+{
+    type                forces;
+    functionObjectLibs  ("libforces.so");
+    enabled             false;
+
+    //outputControl       outputTime;
+    outputControl       timeStep;
+    outputInterval      1;
+
+    //// Patches to sample
+    //patches ("body1" "body2" "body3");
+    patches ("cylinderWalls");
+
+    //// Name of fields
+    pName   p;
+    Uname   U;
+
+    //// Density
+    rho     rhoInf;
+    rhoInf  1.225;
+
+    //// Centre of rotation
+    CofR    (0 0 0);
+}
+
+forceCoeffs_object
+{
+    // rhoInf - reference density
+    // CofR - Centre of rotation
+    // dragDir - Direction of drag coefficient
+    // liftDir - Direction of lift coefficient
+    // pitchAxis - Pitching moment axis
+    // magUinf - free stream velocity magnitude
+    // lRef - reference length
+    // Aref - reference area
+    type                forceCoeffs;
+    functionObjectLibs  ("libforces.so");
+    //patches             ("body1" "body2" "body3");
+    patches             ("cylinderWalls");
+
+    pName       p;
+    Uname       U;
+    rho         rhoInf;
+    rhoInf      1.0;
+
+    //// Dump to file
+    log         true;
+
+    CofR        (0 0 0);
+    liftDir     (0 1 0);
+    dragDir     (1 0 0);
+    pitchAxis   (0 0 1);
+    magUInf     1.0;
+    lRef        1.0;         // reference lenght
+    Aref        1.0;         // reference area 1 for 2d
+
+    outputControl   timeStep;
+    outputInterval  1;
+}
+
+minmaxdomain
+{
+    type        fieldMinMax;
+    //type      banana;
+
+    functionObjectLibs ("libfieldFunctionObjects.so");
+
+    enabled     false;
+
+    mode        component;
+
+    outputControl   timeStep;
+    outputInterval  1;
+
+    log         true;
+
+    fields      (p U k omega);
+    //fields      (p U y);
+}
+
+probes1
+{
+    type                probes;
+    functionObjectLibs  ("libsampling.so");
+
+    enabled             false;
+
+    //dictionary        probesDict;
+    probeLocations
+    (
+        (2 1 0)
+    );
+    fields      (p U);
+
+    outputControl       timeStep;
+    outputInterval      1;
+}
+
+probes2
+{
+    type                probes;
+    functionObjectLibs  ("libsampling.so");
+
+    enabled             false;
+
+    //dictionary        probesDict;
+    probeLocations
+    (
+        (5 0.5 0)
+        (5 0 0)
+        (5 -0.5 0)
+        (10 0.5 0)
+        (10 0 0)
+        (10 -0.5 0)
+    );
+    fields      (p U);
+
+    outputControl       timeStep;
+    outputInterval      1;
+}
+
+surfaceSampling
+{
+    // Sample near-wall velocity
+    type                surfaces;
+
+    // Where to load it from (if not already in solver)
+    functionObjectLibs  ("libsampling.so");
+
+    enabled         false;
+    outputControl   outputTime;
+
+    //outputControl     timeStep;
+    //outputInterval    1;
+
+    interpolationScheme cellPoint;
+    surfaceFormat   raw;
+
+    // Fields to be sampled
+    fields          (p);
+
+    surfaces
+    (
+        nearWall
+        {
+            type            patch;
+            patches         ( "cylinderWalls" );
+            //distance        0;
+            interpolate     true;
+            triangulate     false;
+        }
+    );
+}
+
+sampleset
+{
+    // Sample near-wall velocity
+    type        sets;
+    enabled     false;
+
+    //outputControl   outputTime;
+    outputControl   timeStep;
+    outputInterval  1;
+
+    // Set output format : choice of
+    //      xmgr
+    //      jplot
+    //      gnuplot
+    //      raw
+    //      vtk
+    //      ensight
+    //      csv
+    setFormat raw;
+
+    // Surface output format. Choice of
+    //      null        : suppress output
+    //      ensight     : Ensight Gold format, one field per case file
+    //      foamFile    : separate points, faces and values file
+    //      dx          : DX scalar or vector format
+    //      vtk         : VTK ascii format
+    //      raw         : x y z value format for use with e.g. gnuplot 'splot'.
+    //
+    // Note:
+    // other formats such as obj, stl, etc can also be written (by proxy)
+    // but without any values!
+    surfaceFormat vtk;
+
+    // optionally define extra controls for the output formats
+    /*
+    formatOptions
+    {
+    ensight
+    {
+        format  ascii;
+    }
+    }
+    */
+
+    // interpolationScheme. choice of
+    //      cell          : use cell-centre value only; constant over cells
+    //                      (default)
+    //      cellPoint     : use cell-centre and vertex values
+    //      cellPointFace : use cell-centre, vertex and face values.
+    //      pointMVC      : use point values only (Mean Value Coordinates)
+    //      cellPatchConstrained : like 'cell' but uses cell-centre except on
+    //                             boundary faces where it uses the boundary value.
+    //                             For use with e.g. patchCloudSet.
+    // 1] vertex values determined from neighbouring cell-centre values
+    // 2] face values determined using the current face interpolation scheme
+    //    for the field (linear, gamma, etc.)
+    interpolationScheme cellPoint;
+
+    // Fields to sample.
+    fields      (p U);
+
+    // Set sampling definition: choice of
+    //      uniform             evenly distributed points on line
+    //      face                one point per face intersection
+    //      midPoint            one point per cell, inbetween two face intersections
+    //      midPointAndFace     combination of face and midPoint
+    //
+    //      polyLine            specified points, not nessecary on line, uses
+    //                          tracking
+    //      cloud               specified points, uses findCell
+    //      triSurfaceMeshPointSet  points of triSurface
+    //
+    // axis: how to write point coordinate. Choice of
+    // - x/y/z: x/y/z coordinate only
+    // - xyz: three columns
+    //  (probably does not make sense for anything but raw)
+    // - distance: distance from start of sampling line (if uses line) or
+    //             distance from first specified sampling point
+    //
+    // type specific:
+    //      uniform, face, midPoint, midPointAndFace : start and end coordinate
+    //      uniform: extra number of sampling points
+    //      polyLine, cloud: list of coordinates
+    //      patchCloud: list of coordinates and set of patches to look for nearest
+    //      patchSeed: random sampling on set of patches. Points slightly off
+    //                 face centre.
+    sets
+    (
+        lineX1
+        {
+            type            midPoint;
+            axis            y;
+            start           (5 -4 0);
+            end             (5  4 0);
+        }
+        lineX2
+        {
+            type        uniform;
+            axis        distance;
+            start       (10 -4 0);
+            end         (10  4 0);
+            nPoints     10;
+        }
+        somePoints
+        {
+            type    cloud;
+            axis    xyz;
+            points  ((2 0 0)(-3 3 0));
+        }
+
+    );
+}
+
+#include "sampling/internalCloud"
+
+}
+
+// ************************************************************************* //
+
